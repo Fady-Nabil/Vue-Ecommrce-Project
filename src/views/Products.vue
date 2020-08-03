@@ -89,16 +89,24 @@
                       <input type="text" placeholder="Product price" v-model="product.price" class="form-control">
                     </div>
                     <div class="form-group">
-                      <input type="text"  placeholder="Product tags" v-model="product.tag" class="form-control">
+                      <input type="text" @keyup.188="addTag"  placeholder="Product tags" v-model="tag" class="form-control">
                       <div class="d-flex">
-                    
+                          <p v-for="tag in product.tags" v-bind:key="tag">
+                            <span class="p-1">{{tag}}</span>
+                          </p>
                       </div>
                     </div>
                     <div class="form-group">
                       <label for="product_image">Product Images</label>
-                      <input type="file"  class="form-control">
+                      <input type="file" @change="uploadImage" class="form-control">
                     </div>
                     <div class="form-group d-flex">
+                      <div class="p-1" v-for="(image, index) in product.images" v-bind:key="image" v-bind:index="index">
+                        <div class="img-wrapp">
+                          <img width="100px;" :src="image" alt="Product Image"><!-- {{image}} previously -->
+                          <span class="delete-img" @click="deleteImage(image, index)">X</span>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -116,7 +124,7 @@
 
 <script>
 import { VueEditor } from "vue2-editor"; //for using editor
-import {db} from '../firebase.js';
+import {fb, db} from '../firebase.js';
 import $ from 'jquery';
 import Swal from 'sweetalert2';
 
@@ -135,12 +143,13 @@ export default {
         name        : null,
         description : null,
         price       : null,
-        tag         : null,
-        image       : null
+        tags        : [],
+        images      : []
       },
       activeItem : null,
       title : null,
-      modal : null
+      modal : null,
+      tag   : null
     }
   },
   firestore() {
@@ -150,6 +159,43 @@ export default {
     }
   },
   methods: {
+  deleteImage(img, index) {
+    let image = fb.storage().refFromURL(img);
+    this.product.images.splice(index,1);
+    image.delete().then(function() {
+      console.log('image deleted');
+    }).catch(function(error) {
+      // Uh-oh, an error occurred!
+      console.log('an error occurred' + error);
+    });  
+  },  
+  addTag() {
+    this.product.tags.push(this.tag);
+    this.tag = '';
+  },
+  uploadImage(e) {
+    if(e.target.files[0]) {
+      let file = e.target.files[0];
+      // Create a root reference
+      var storageRef = fb.storage().ref('products/' + Math.random() + '_' + file.name);
+      let uploadTask  = storageRef.put(file);
+      uploadTask.on('state_changed', (snapshot) => {
+        var progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+        console.log('Upload is ' + progress + '% done');
+      }, (error) => {
+        // Handle unsuccessful uploads
+        console.log('Error is ' + error);
+      }, () => {
+        // Handle successful uploads on complete
+        // For instance, get the download URL: https://firebasestorage.googleapis.com/...
+        
+        uploadTask.snapshot.ref.getDownloadURL().then((downloadURL) => {
+          this.product.images.push(downloadURL);
+          console.log('File available at', downloadURL);
+        });
+      });
+    }//end if
+  }, 
   addNew() {
     this.title = 'Add Product';
     this.modal = 'new';
@@ -273,5 +319,15 @@ export default {
 
 <!-- Add "scoped" attribute to limit CSS to this component only -->
 <style scoped>
-
+.img-wrapp{
+  position: relative;
+}
+.img-wrapp span.delete-img{
+    position: absolute;
+    top: -14px;
+    left: -2px;
+}
+.img-wrapp span.delete-img:hover{
+  cursor: pointer;
+}
 </style>
